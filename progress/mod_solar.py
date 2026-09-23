@@ -5,10 +5,22 @@ import glob
 import numpy as np
 from datetime import datetime, timedelta
 
-import pvlib.pvsystem as pv
-import pvlib.location as loc
-import pvlib.modelchain as mc
-import pvlib
+try:
+    import pvlib.pvsystem as pv
+    import pvlib.location as loc
+    import pvlib.modelchain as mc
+    import pvlib
+except ModuleNotFoundError:  # pragma: no cover - optional dependency for analytics workloads
+    pv = None
+    loc = None
+    mc = None
+    pvlib = None
+
+
+def _build_secure_request_kwargs(timeout=60, verify=True):
+    """Return safe HTTP request options for NREL API access."""
+    return {"timeout": timeout, "verify": verify}
+
 
 class Solar:
     """
@@ -37,6 +49,8 @@ class Solar:
         pass
 
     def SolarGen(self, api_key, your_name, your_affiliation, your_email, year_start, year_end):
+        if pv is None or mc is None or pvlib is None:
+            raise ModuleNotFoundError("pvlib is required to run solar generation calculations.")
         """
         Downloads weather data from NREL NSRDB and calculates solar generation using PVLib.
 
@@ -68,11 +82,12 @@ class Solar:
                 lon = self.lons[i]
                 
                 # download data for satellite
-                url = 'https://developer.nlr.gov/api/nsrdb/v2/solar/nsrdb-GOES-tmy-v4-0-0-download.csv?wkt=POINT({lon}%20{lat})&names=tmy-{year}&leap_day={leap}&interval={interval}&utc={utc}&full_name={name}&email={email}&affiliation={affiliation}&mailing_list={mailing_list}&reason={reason}&api_key={api}'\
+                url = 'https://developer.nrel.gov/api/nsrdb/v2/solar/nsrdb-GOES-tmy-v4-0-0-download.csv?wkt=POINT({lon}%20{lat})&names=tmy-{year}&leap_day={leap}&interval={interval}&utc={utc}&full_name={name}&email={email}&affiliation={affiliation}&mailing_list={mailing_list}&reason={reason}&api_key={api}'\
                     .format(year=year, lat=lat, lon=lon, leap=leap_year, interval=interval, utc=utc, name=your_name, \
                     email=your_email, mailing_list=mailing_list, affiliation=your_affiliation, reason=reason, \
                     api=api_key)
-                response = requests.get(url, verify=False)
+                secured = _build_secure_request_kwargs(timeout=60, verify=True)
+                response = requests.get(url, **secured)
 
                 # store data in csv file
                 csv_data = response.text

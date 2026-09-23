@@ -2,13 +2,25 @@ import numpy as np
 import pandas as pd
 import requests
 import os
-from rex import WindResource as WR
+
+try:
+    from rex import WindResource as WR
+except ModuleNotFoundError:  # pragma: no cover - optional dependency for wind analytics workloads
+    WR = None
+
+
+def _build_secure_request_kwargs(timeout=60, verify=True):
+    """Return secure HTTP request options for external weather data downloads."""
+    return {"timeout": timeout, "verify": verify}
+
 
 class Wind:
 
     '''This class contains the methods required for downloading and processing wind data.'''
 
     def DownloadWindData(self, directory, site_data, api_key, email, affiliation, year_start, year_end):
+        if WR is None:
+            raise ModuleNotFoundError("rex is required to run wind interpolation calculations.")
         """
         Downloads wind speed data from the NREL wind toolkit.
 
@@ -36,7 +48,7 @@ class Wind:
                 name = name_list[i]
                 coords = coord_list[i]
                 print(name, " at ", coords)
-                response = requests.get("https://developer.nlr.gov/api/wind-toolkit/v2/wind/wtk-download.csv", params={
+                request_params = {
                     "api_key": api_key,
                     "wkt": f"POINT({coords})",
                     "attributes": "windspeed_80m,windspeed_100m",
@@ -47,7 +59,13 @@ class Wind:
                     "email": email,
                     "reason": "R&D",
                     "affiliation": affiliation,
-                }, verify= False)
+                }
+                secured = _build_secure_request_kwargs(timeout=60, verify=True)
+                response = requests.get(
+                    "https://developer.nrel.gov/api/wind-toolkit/v2/wind/wtk-download.csv",
+                    params=request_params,
+                    **secured,
+                )
                 csv_data = response.text
                 if not os.path.exists(f"{directory}/wtk_data/{year}"):
                     os.makedirs(f"{directory}/wtk_data/{year}")
