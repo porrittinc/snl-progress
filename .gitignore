@@ -6,3 +6,6 @@ config.ini
 *.pyc
 progress/Data/*
 progress/Results
+.venv/
+.venv311/
+install.log
